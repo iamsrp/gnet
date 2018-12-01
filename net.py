@@ -362,7 +362,8 @@ class NetRunner:
             A tuple of: loss, accuracy. Per the test data.
         '''
         LOG.info("Doing network run")
-        with tf.Session() as sess:
+        debug = (LOG.getLevelName(LOG.getLogger().level) == 'DEBUG')
+        with tf.Session(config=tf.ConfigProto(log_device_placement=debug)) as sess:
             # Create the network
             LOG.info("Creating the network")
             net_maker = NetMaker(self._graph)
