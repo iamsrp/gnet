@@ -10,7 +10,7 @@ class NodeType(Enum):
     '''
     IN  = 1 # An input node
     OUT = 2 # An output node
-    MID = 3 # An inner node
+    MID = 3 # An mid node
 
 
 class Node:
@@ -159,7 +159,7 @@ class Node:
         '''
         Remove this node from the graph.
         
-        @raises: L{ValueError} if this node was not an inner one.
+        @raises: L{ValueError} if this node was not an mid one.
         '''
         # This is done by stiching the nodes which refer to this one directly to
         # the nodes to which this one refers.
@@ -283,6 +283,16 @@ class Node:
             referrer._flush_closure()
 
 
+    def __str__(self):
+        return "Node{%s,%s%sRefIn:%d,RefOut:%d}" % (
+            self._type,
+            "" if self._mult is None else "Mult:%0.3f," % self._mult,
+            "" if self._bias is None else "Bias:%0.3f," % self._bias,
+            len(self._referees),
+            len(self._referers)
+        )
+
+
 class Graph:
     '''
     A collection of L{Node}s. The graph is really defined by the Nodes and their
@@ -317,7 +327,7 @@ class Graph:
         # All the nodes in the graph, broken up by type
         self._inputs  = tuple(inputs)
         self._outputs = tuple(outputs)
-        self._inner   = set()
+        self._mid   = set()
 
         # Sanity
         if len(self._inputs) == 0:
@@ -363,15 +373,15 @@ class Graph:
 
 
     @property
-    def inner(self):
+    def mid(self):
         '''
-        Get the inner nodes.
+        Get the mid nodes.
 
         @rtype: set
         @return:
-            The inner nodes of the graph.
+            The mid nodes of the graph.
         '''
-        return self._inner
+        return self._mid
 
 
     @property
@@ -379,7 +389,7 @@ class Graph:
         '''
         Get all the nodes in this graph. This is potentially expensive to call.
         '''
-        return set(self._inputs).union(self._outputs).union(self._inner)
+        return set(self._inputs).union(self._outputs).union(self._mid)
 
 
     @property
@@ -441,7 +451,7 @@ class Graph:
         if   node.node_type is NodeType.IN:
             self._inputs.add(node)
         elif node.node_type is NodeType.MID:
-            self._inner.add(node)
+            self._mid.add(node)
         elif node.node_type is NodeType.OUT:
             self._outputs.add(node)
         else:
@@ -465,7 +475,7 @@ class Graph:
         if   node.node_type is NodeType.IN:
             nodes = self._inputs
         elif node.node_type is NodeType.MID:
-            nodes = self._inner
+            nodes = self._mid
         elif node.node_type is NodeType.OUT:
             nodes = self._outputs
 
@@ -499,5 +509,14 @@ class Graph:
         Whether this graph contains the given node.
         '''
         return (node in self._inputs or
-                node in self._inner  or
+                node in self._mid  or
                 node in self._outputs)
+
+
+    def __str__(self):
+        return "Graph{%s,In:%d,Mid:%d,Out:%d}" % (
+            self._name,
+            len(self._inputs),
+            len(self._mid),
+            len(self._outputs)
+        )

@@ -45,7 +45,7 @@ class NetMaker:
         self._layers[num_layers - 1] = list(graph.outputs)
 
         # Now add in the inner nodes
-        for node in graph.inner:
+        for node in graph.mid:
             # Make sure tht we don't have a non-inner node for some weird
             # reason.
             depth = node.depth
@@ -66,6 +66,9 @@ class NetMaker:
             shape=[None, len(graph.inputs)],
             name='inputs'
         )
+
+        # Say what we're doing
+        LOG.info("Initted with a graph: %s", self._graph)
     
 
     def make_net(self):
@@ -82,7 +85,9 @@ class NetMaker:
             scope_id = NetMaker._SCOPE_ID
             NetMaker._SCOPE_ID += 1
         with tf.variable_scope("graph_%d_%d" % (id(self._graph), scope_id)):
-            return self._make_net()
+            net = self._make_net()
+            LOG.info("Created net: %s", net)
+            return net
 
 
     def _make_net(self):
@@ -319,11 +324,13 @@ class NetRunner:
 
         self._graph = graph
 
+        LOG.info("Loading data")
         (self._x_train,
          self._y_train,
          self._x_test,
          self._y_test) = self._load_data()
 
+        # Make sure that looks like what we expect
         if len(self._x_train.shape) != 2:
             raise ValueError("Bad shape for x_train: %s", self._x_train.shape)
         if len(self._y_train.shape) != 2:
@@ -333,65 +340,87 @@ class NetRunner:
         if len(self._y_test.shape) != 2:
             raise ValueError("Bad shape for y_test: %s", self._y_test.shape)
 
+        # How we are set up
+        LOG.info("Init params:")
+        LOG.info("  Num Epochs: %d",    self._num_epochs)
+        LOG.info("  Batch Size: %d",    self._batch_size)
+        LOG.info("  Rate:       %0.4f", self._learning_rate)
+        LOG.info("  Graph:      %s",    self._graph)
+        LOG.info("  Data:",)
+        LOG.info("    x_train: %s", self._x_train.shape)
+        LOG.info("    y_train: %s", self._y_train.shape)
+        LOG.info("    x_test:  %s", self._x_test .shape)
+        LOG.info("    y_test:  %s", self._y_test .shape)
+
 
     def run(self):
         '''
         Build the network and run it. 
 
-        @rtype: float32
+        @rtype: tuple(float32, float32)
         @return:
-            The loss, per the test data.
+            A tuple of: loss, accuracy. Per the test data.
         '''
+        LOG.info("Doing network run")
         with tf.Session() as sess:
             # Create the network
-            net_maker = NetMaker(graph)
+            LOG.info("Creating the network")
+            net_maker = NetMaker(self._graph)
             layers    = net_maker.make_net()
 
             # Grab the inputs and outputs
             in_tensor  = layers[ 0]
             out_tensor = layers[-1]
 
-            # XXX check x_* & y_* and net shapes match
+            # The number of inputs and outputs
             num_in  = self._x_train.shape[1]
             num_out = self._y_train.shape[1]
 
+            # Check x_* & y_* and net shapes match
+            if num_in != in_tensor.shape[1]:
+                raise ValueError(
+                    "Number of data inputs, %d, "
+                    "does not match network input count, %d",
+                    num_in, in_tensor.shape[1]
+                )
+            if num_out != out_tensor.shape[1]:
+                raise ValueError(
+                    "Number of data outputs, %d, "
+                    "does not match network output count, %d",
+                    num_out, out_tensor.shape[1]
+                )
+
             # Now make the training equipment
-            truth = \
-                tf.placeholder(
-                    tf.float32,
-                    shape=[None,  num_out],
-                    name='truth'
-                )
-            loss = \
-                tf.reduce_mean(
-                    tf.nn.softmax_cross_entropy_with_logits_v2(
-                        labels=truth,
-                        logits=out_tensor
-                    ),
-                    name='loss'
-                )
-            optimizer = \
-                tf.train.AdamOptimizer(
-                    learning_rate=self._learning_rate,
-                    name='optimizer'
-                ).minimize(loss)
+            truth     = tf.placeholder(tf.float32, shape=[None, num_out])
+            loss      = self._create_loss     (truth, out_tensor)
+            accuracy  = self._create_accuracy (truth, out_tensor)
+            optimizer = self._create_optimizer(loss)
+
+            # Initialize all variables
+            sess.run(tf.global_variables_initializer())
 
             # Train for this epoch
+            LOG.info("Training the network")
             for epoch in range(self._num_epochs):
                 self._do_epoch(sess, in_tensor, truth, optimizer)
 
             # And give back the loss and accuracy
-            return sess.run(
-                loss,
-                feed_dict={ in_tensor : x_test,
-                            truth     : y_test }
-            )
+            LOG.info("Evaluating the network")
+            result = sess.run((loss, accuracy),
+                              feed_dict={ in_tensor : self._x_test,
+                                          truth     : self._y_test })
+            LOG.info("Result: loss=%0.3f accuracy=%0.2f%%",
+                     result[0],
+                     100 * result[1])
+            return result
                 
 
     def _do_epoch(self, sess, x, y, optimizer):
         '''
         Train for an epoch.
         '''
+        LOG.info("Doing epoch")
+
         # Randomly shuffle the training data at the beginning of each epoch
         permutation = np.random.permutation(self._y_train.shape[0]).astype(np.int32)
         x_train = self._x_train[permutation, :]
@@ -420,4 +449,71 @@ class NetRunner:
             A 4-tuple of C{x_train, y_train, x_test, y_test}.
         '''
         raise NotImplementedException("Abstract method called")
-         
+
+
+    def _create_loss(self, truth, out):
+        '''
+        Create the loss tensor.
+
+        @type  truth: tensor
+        @param truth:
+            The training data, ground truth.
+        @type  out: tensor
+        @param out:
+            The output layer of the network
+
+        @rtype: tensor
+        @return:
+            The loss function.
+        '''
+        return tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels=truth,
+                logits=out
+            ),
+            name='loss'
+        )
+
+
+    def _create_accuracy(self, truth, out):
+        '''
+        Create the accuracy tensor.
+
+        @type  truth: tensor
+        @param truth:
+            The training data, ground truth.
+        @type  out: tensor
+        @param out:
+            The output layer of the network
+
+        @rtype: tensor
+        @return:
+            The accuracy function.
+        '''
+        return tf.reduce_mean(
+            tf.cast(
+                tf.equal(tf.argmax(out,   1),
+                         tf.argmax(truth, 1)),
+                tf.float32
+            ),
+            name='accuracy'
+        )
+
+
+    def _create_optimizer(self, loss):
+        '''
+        Create the optimizer.
+
+        @type  loss: tensor
+        @param loss:
+            The loss function.
+
+        @rtype: optimizer
+        @return:
+            The optimizer.
+        '''
+        return tf.train.AdamOptimizer(
+            learning_rate=self._learning_rate,
+            name='optimizer'
+        ).minimize(loss)
+        
