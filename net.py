@@ -4,14 +4,20 @@ The Neural Network code for gnet.
 
 from   graph      import Graph, Node, NodeType
 from   log        import LOG
+from   threading  import Lock
 
 import numpy      as     np
 import tensorflow as     tf
 
 class NetMaker:
     '''
-    A class which generate a neural network from a Graph.
+    A class which generate a neural network from a L{Graph}.
     '''
+
+    # How we make the scopes unique
+    _SCOPE_ID   = 0
+    _SCOPE_LOCK = Lock()
+
     def __init__(self, graph):
         '''
         @type  graph: Graph
@@ -65,6 +71,23 @@ class NetMaker:
     def make_net(self):
         '''
         Create the network for the graph.
+
+        @rtype: list<tensor>
+        @return: 
+            List of layers with the first being the inputs and the last 
+            being the outputs.
+        '''
+        # Do this within a scope in order to get unique variables etc.
+        with NetMaker._SCOPE_LOCK:
+            scope_id = NetMaker._SCOPE_ID
+            NetMaker._SCOPE_ID += 1
+        with tf.variable_scope("graph_%d_%d" % (id(self._graph), scope_id)):
+            return self._make_net()
+
+
+    def _make_net(self):
+        '''
+        The actual make_net method.
 
         @rtype: list<tensor>
         @return: 
@@ -277,3 +300,124 @@ class NetMaker:
             sigmoid to.
         '''
         return self._sigmoid(tensor)
+
+
+class NetRunner:
+    '''
+    The base class for evaluating nets generated from some L{Graph}.
+    '''
+    def __init__(self, graph):
+        '''
+        @type  graph: Graph
+        @param graph:
+            The graph to run the network for.
+        '''
+        # Hyper-parameters
+        self._num_epochs    =  10     # Total number of training epochs
+        self._batch_size    = 100     # Training batch size
+        self._learning_rate =   0.001 # The optimization initial learning rate
+
+        self._graph = graph
+
+        (self._x_train,
+         self._y_train,
+         self._x_test,
+         self._y_test) = self._load_data()
+
+        if len(self._x_train.shape) != 2:
+            raise ValueError("Bad shape for x_train: %s", self._x_train.shape)
+        if len(self._y_train.shape) != 2:
+            raise ValueError("Bad shape for y_train: %s", self._y_train.shape)
+        if len(self._x_test.shape) != 2:
+            raise ValueError("Bad shape for x_test: %s",  self._x_test.shape)
+        if len(self._y_test.shape) != 2:
+            raise ValueError("Bad shape for y_test: %s", self._y_test.shape)
+
+
+    def run(self):
+        '''
+        Build the network and run it. 
+
+        @rtype: float32
+        @return:
+            The loss, per the test data.
+        '''
+        with tf.Session() as sess:
+            # Create the network
+            net_maker = NetMaker(graph)
+            layers    = net_maker.make_net()
+
+            # Grab the inputs and outputs
+            in_tensor  = layers[ 0]
+            out_tensor = layers[-1]
+
+            # XXX check x_* & y_* and net shapes match
+            num_in  = self._x_train.shape[1]
+            num_out = self._y_train.shape[1]
+
+            # Now make the training equipment
+            truth = \
+                tf.placeholder(
+                    tf.float32,
+                    shape=[None,  num_out],
+                    name='truth'
+                )
+            loss = \
+                tf.reduce_mean(
+                    tf.nn.softmax_cross_entropy_with_logits_v2(
+                        labels=truth,
+                        logits=out_tensor
+                    ),
+                    name='loss'
+                )
+            optimizer = \
+                tf.train.AdamOptimizer(
+                    learning_rate=self._learning_rate,
+                    name='optimizer'
+                ).minimize(loss)
+
+            # Train for this epoch
+            for epoch in range(self._num_epochs):
+                self._do_epoch(sess, in_tensor, truth, optimizer)
+
+            # And give back the loss and accuracy
+            return sess.run(
+                loss,
+                feed_dict={ in_tensor : x_test,
+                            truth     : y_test }
+            )
+                
+
+    def _do_epoch(self, sess, x, y, optimizer):
+        '''
+        Train for an epoch.
+        '''
+        # Randomly shuffle the training data at the beginning of each epoch
+        permutation = np.random.permutation(self._y_train.shape[0]).astype(np.int32)
+        x_train = self._x_train[permutation, :]
+        y_train = self._y_train[permutation]
+
+        pos = 0
+        for iteration in range(int(len(y_train) / self._batch_size)):
+            # Slice out this batch
+            x_batch = x_train[pos : pos + self._batch_size]
+            y_batch = y_train[pos : pos + self._batch_size]
+            pos    += self._batch_size
+
+            # Run optimization op (backprop)
+            sess.run(
+                optimizer,
+                feed_dict={ x : x_batch,
+                            y : y_batch }
+            )
+
+
+    def _load_data(self):
+        '''
+        An abstract method which subclasses should implement.
+
+        @return:
+            A 4-tuple of C{x_train, y_train, x_test, y_test}.
+        '''
+        raise NotImplementedException("Abstract method called")
+         
