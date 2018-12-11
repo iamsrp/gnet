@@ -152,7 +152,7 @@ class NetMaker:
             # it. Create the actual input tensor from layer ones. The first,
             # [0], dimension is the different input values, so we concatenate
             # along the second, [1].
-            input_tensor = tf.concat(input_tensors, 1)
+            input_tensor = tf.concat(input_tensors, 1, name="input")
 
             # Now we can figure out the mask for the matrix. This is a dict from
             # an (input,output) index tuple to a constant weight value, or None
@@ -239,7 +239,10 @@ class NetMaker:
             )
 
             # The masked weights are derived using the where() method
-            masked_weights = tf.where(multiplier_mask, weights, multipliers)
+            masked_weights = tf.where(multiplier_mask,
+                                      weights,
+                                      multipliers,
+                                      name="multipliers_where_%d" % (depth,))
 
             # Similar for the bias. Only do this if we have any constant biases
             # though (we might not have).
@@ -262,7 +265,10 @@ class NetMaker:
                 )
 
                 # And create the masked like with the weights
-                masked_biases = tf.where(bias_mask, bias, biases)
+                masked_biases = tf.where(bias_mask,
+                                         bias,
+                                         biases,
+                                         name="bias_where_%d" % (depth,))
             else:
                 # No masking required
                 masked_biases = bias
