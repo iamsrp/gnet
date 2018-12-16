@@ -103,11 +103,19 @@ class Node:
 
 
     @property
-    def multipler(self):
+    def multiplier(self):
         '''
         This node's multiplier, if it is a constant, else None.
         '''
         return self._mult
+
+
+    @multiplier.setter
+    def multipler(self, multipler):
+        '''
+        Set this node's multiplier.
+        '''
+        self._mult = None if multiplier is None else float(multiplier)
 
 
     @property
@@ -116,6 +124,14 @@ class Node:
         This node's bias, if it is a constant, else None.
         '''
         return self._bias
+
+
+    @bias.setter
+    def bias(self, bias):
+        '''
+        Set this node's bias.
+        '''
+        self._bias = None if bias is None else float(bias)
 
 
     def add_referee(self, node):
@@ -299,7 +315,7 @@ class Graph:
     connections. The graph itself doesn't keep track of the toplogy of the
     nodes, it's just responsible for higher level operations.
     '''
-    def __init__(self, name, inputs, outputs):
+    def __init__(self, name, inputs, outputs, mids=None):
         '''
         @type  name: str
         @param name:
@@ -308,9 +324,12 @@ class Graph:
         @type  inputs: iterable(Node)
         @param inputs:
             The input nodes in the graph. Must not be empty.
-        @type  inputs: iterable(Node)
+        @type  outputs: iterable(Node)
         @param outputs:
             The output nodes in the graph. Must not be empty.
+        @type  mids: iterable(Node)
+        @param mids:
+            Any inner nodes in the graph. May be None or empty.
 
         '''
         # Sanity
@@ -327,7 +346,9 @@ class Graph:
         # All the nodes in the graph, broken up by type
         self._inputs  = tuple(inputs)
         self._outputs = tuple(outputs)
-        self._mid   = set()
+        self._mid     = set()
+        if mids is not None:
+            self._mid.update(mids)
 
         # Sanity
         if len(self._inputs) == 0:
@@ -338,6 +359,8 @@ class Graph:
             raise ValueError("Input nodes were not all of input type")
         if len([n for n in self._outputs if n.node_type is not NodeType.OUT]) > 0:
             raise ValueError("Output nodes were not all of output type")
+        if len([n for n in self._mid if n.node_type is not NodeType.MID]) > 0:
+            raise ValueError("Middle nodes were not all of middle type")
 
         
     @property
@@ -509,8 +532,42 @@ class Graph:
         Whether this graph contains the given node.
         '''
         return (node in self._inputs or
-                node in self._mid  or
+                node in self._mid    or
                 node in self._outputs)
+
+
+    def clone(self, new_name):
+        '''
+        Create a copy of this Graph instance, giving it the new name. The
+        resulting instance will be wholly distinct from this instance.
+
+        @type  new_name: str
+        @param new_name:
+            The name of the new graph.
+        '''
+        # First we duplicate all the nodes in this graph, creating a
+        # mapping from this graph's nodes to the new ones.
+        mapping = dict()
+        new_in  = list()
+        new_mid = list()
+        new_out = list()
+        for (old_nodes, new_nodes) in ((new_in,  self._inputs ),
+                                       (new_mid, self._mid    ),
+                                       (new_out, self._outputs)):
+            for node in old_nodes:
+                new = Node(node_type=node.node_type,
+                           multiplier=node.multiplier,
+                           bias=node.bias)
+                mapping[node] = new
+                new_nodes.append(new)
+
+        # Connect them all in the same way
+        for node in mapping.values():
+            for old_referee in node.referees:
+                node.add_referee(mapping[old_referee])
+
+        # Create the graph and hand it back
+        return Graph(new_name, new_in, new_out, mids=new_mids)
 
 
     def __str__(self):
@@ -520,3 +577,9 @@ class Graph:
             len(self._mid),
             len(self._outputs)
         )
+
+
+    def __size__(self):
+        return (len(self._inputs) +
+                len(self._mid)    +
+                len(self._outputs))

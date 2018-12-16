@@ -328,6 +328,7 @@ class NetRunner:
         self._batch_size    = 100     # Training batch size
         self._learning_rate =   0.001 # The optimization initial learning rate
 
+        LOG.info("Graph: %s", graph)
         self._graph = graph
 
         LOG.info("Loading data")
@@ -344,7 +345,7 @@ class NetRunner:
         if len(self._x_test.shape) != 2:
             raise ValueError("Bad shape for x_test: %s",  self._x_test.shape)
         if len(self._y_test.shape) != 2:
-            raise ValueError("Bad shape for y_test: %s", self._y_test.shape)
+            raise ValueError("Bad shape for y_test: %s",  self._y_test.shape)
 
         # How we are set up
         LOG.info("Init params:")
@@ -367,11 +368,11 @@ class NetRunner:
         @return:
             A tuple of: loss, accuracy. Per the test data.
         '''
-        LOG.info("Doing network run")
+        LOG.info("[%s] Doing network run", self._graph.name)
         debug = (LOG.getLevelName(LOG.getLogger().level) == 'DEBUG')
         with tf.Session(config=tf.ConfigProto(log_device_placement=debug)) as sess:
             # Create the network
-            LOG.info("Creating the network")
+            LOG.info("[%s] Creating the network", self._graph.name)
             net_maker = NetMaker(self._graph)
             layers    = net_maker.make_net()
 
@@ -387,14 +388,16 @@ class NetRunner:
             if num_in != in_tensor.shape[1]:
                 raise ValueError(
                     "Number of data inputs, %d, "
-                    "does not match network input count, %d",
-                    num_in, in_tensor.shape[1]
+                    "does not match network input count, %d, "
+                    "for graph %s",
+                    num_in, in_tensor.shape[1], self._graph
                 )
             if num_out != out_tensor.shape[1]:
                 raise ValueError(
                     "Number of data outputs, %d, "
-                    "does not match network output count, %d",
-                    num_out, out_tensor.shape[1]
+                    "does not match network output count, %d, "
+                    "for graph %s",
+                    num_out, out_tensor.shape[1], self._graph
                 )
 
             # Now make the training equipment
@@ -407,26 +410,27 @@ class NetRunner:
             sess.run(tf.global_variables_initializer())
 
             # Train for this epoch
-            LOG.info("Training the network")
+            LOG.info("[%s] Training the network", self._graph.name)
             for epoch in range(self._num_epochs):
-                self._do_epoch(sess, in_tensor, truth, optimizer)
+                self._do_epoch(epoch, sess, in_tensor, truth, optimizer)
 
             # And give back the loss and accuracy
-            LOG.info("Evaluating the network")
+            LOG.info("[%s] Evaluating the network", self._graph.name)
             result = sess.run((loss, accuracy),
                               feed_dict={ in_tensor : self._x_test,
                                           truth     : self._y_test })
-            LOG.info("Result: loss=%0.3f accuracy=%0.2f%%",
+            LOG.info("[%s] Result: loss=%0.3f accuracy=%0.2f%%",
                      result[0],
-                     100 * result[1])
+                     100 * result[1],
+                     self._graph.name)
             return result
                 
 
-    def _do_epoch(self, sess, x, y, optimizer):
+    def _do_epoch(self, epoch, sess, x, y, optimizer):
         '''
         Train for an epoch.
         '''
-        LOG.info("Doing epoch")
+        LOG.info("[%s] Doing epoch %d", self._graph.name, epoch)
 
         # Randomly shuffle the training data at the beginning of each epoch
         permutation = np.random.permutation(self._y_train.shape[0]).astype(np.int32)
