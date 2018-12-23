@@ -4,6 +4,7 @@
 Wrapper code for using MNIST data.
 """
 
+from   biome      import Biome
 from   graph      import Graph, Node, NodeType
 from   log        import LOG
 from   net        import NetRunner
@@ -58,7 +59,7 @@ class Mnist(NetRunner):
 
 
     @staticmethod
-    def _create_graph(name):
+    def create_graph(name):
         '''
         Create a graph instance for use with Mnist.
         '''
@@ -85,8 +86,11 @@ class Mnist(NetRunner):
         return graph
 
 
-    def __init__(self):
-        super(Mnist, self).__init__(Mnist._create_graph("mnist"))
+    def __init__(self, graph=None):
+        super(Mnist, self).__init__(
+            graph if graph is not None
+            else Mnist.create_graph("mnist")
+        )
 
 
     def _load_data(self):
@@ -101,3 +105,4 @@ if __name__ == "__main__":
     runner = Mnist()
     result = runner.run()
     print("Result: %s" % (result,))
+

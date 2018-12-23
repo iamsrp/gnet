@@ -4,6 +4,8 @@ A graph representation of a Neural Net.
 
 from enum import Enum
 
+# ------------------------------------------------------------------------------
+
 class NodeType(Enum):
     '''
     The different node types.
@@ -19,14 +21,14 @@ class Node:
     '''
     def __init__(self,
                  node_type=NodeType.MID,
-                 multipler=None,
+                 multiplier=None,
                  bias=None):
         '''
         @type  node_type: NodeType
         @param node_type:
             The type of this node.
-        @type  multipler: float
-        @param multipler:
+        @type  multiplier: float
+        @param multiplier:
             If this node's multiplier is a constant one then this is that value.
             Else it is None and, hence, variable.
         @type  bias: float
@@ -36,8 +38,8 @@ class Node:
         '''
         # Save the args
         self._type = node_type
-        self._mult = float(multipler) if multipler is not None else None
-        self._bias = float(bias)      if bias      is not None else None
+        self._mult = float(multiplier) if multiplier is not None else None
+        self._bias = float(bias)       if bias       is not None else None
         
         # The set of nodes to which this node refers
         self._referees = set()
@@ -111,7 +113,7 @@ class Node:
 
 
     @multiplier.setter
-    def multipler(self, multipler):
+    def multipler(self, multiplier):
         '''
         Set this node's multiplier.
         '''
@@ -209,11 +211,11 @@ class Node:
 
         # And clear us out, in case anyone gets any bright ideas about reusing
         # this node
-        self._referees .clear()
-        self._referrers.clear()
-        self._closure = None
-        self._depth   = None
-        self._type    = None
+        del self._referees
+        del self._referrers
+        del self._closure
+        del self._depth
+        del self._type
 
 
     def connects_to(self, node):
@@ -305,7 +307,7 @@ class Node:
             "" if self._mult is None else "Mult:%0.3f," % self._mult,
             "" if self._bias is None else "Bias:%0.3f," % self._bias,
             len(self._referees),
-            len(self._referers)
+            len(self._referrers)
         )
 
 
@@ -440,8 +442,7 @@ class Graph:
                     break
             if not connected:
                 raise ValueError(
-                    "Output node %r is not connected to any input node",
-                    o
+                    "Output node %r is not connected to any input node" % (o,)
                 )
 
             # It's okay to use the depth of this one
@@ -478,7 +479,7 @@ class Graph:
         elif node.node_type is NodeType.OUT:
             self._outputs.add(node)
         else:
-            raise ValueError("Unknown node type: %s", node.node_type())
+            raise ValueError("Unknown node type: %s" % (node.node_type(),))
 
         # Adding the referees to this node should always succeed
         if referees is not None:
@@ -504,7 +505,7 @@ class Graph:
 
         # Check that we have the node
         if node not in nodes:
-            raise ValueError("Node not in graph: %r", node)
+            raise ValueError("Node not in graph: %r" % (node,))
 
         # Okay to remove then
         node.remove()
@@ -551,9 +552,9 @@ class Graph:
         new_in  = list()
         new_mid = list()
         new_out = list()
-        for (old_nodes, new_nodes) in ((new_in,  self._inputs ),
-                                       (new_mid, self._mid    ),
-                                       (new_out, self._outputs)):
+        for (old_nodes, new_nodes) in ((self._inputs,  new_in),
+                                       (self._mid,     new_mid),
+                                       (self._outputs, new_out)):
             for node in old_nodes:
                 new = Node(node_type=node.node_type,
                            multiplier=node.multiplier,
@@ -562,24 +563,26 @@ class Graph:
                 new_nodes.append(new)
 
         # Connect them all in the same way
-        for node in mapping.values():
-            for old_referee in node.referees:
-                node.add_referee(mapping[old_referee])
+        for (old_node, new_node) in mapping.items():
+            for old_referee in old_node.referees:
+                if old_referee in mapping:
+                    new_node.add_referee(mapping[old_referee])
 
         # Create the graph and hand it back
-        return Graph(new_name, new_in, new_out, mids=new_mids)
+        return Graph(new_name, new_in, new_out, mids=new_mid)
 
 
     def __str__(self):
-        return "Graph{%s,In:%d,Mid:%d,Out:%d}" % (
+        return "Graph{'%s',In:%d,Mid:%d,Out:%d,Layers:%d}" % (
             self._name,
             len(self._inputs),
             len(self._mid),
-            len(self._outputs)
+            len(self._outputs),
+            self.num_layers
         )
 
 
-    def __size__(self):
+    def __len__(self):
         return (len(self._inputs) +
                 len(self._mid)    +
                 len(self._outputs))

@@ -9,6 +9,8 @@ from   threading  import Lock
 import numpy      as     np
 import tensorflow as     tf
 
+# ------------------------------------------------------------------------------
+
 class NetMaker:
     '''
     A class which generate a neural network from a L{Graph}.
@@ -58,7 +60,7 @@ class NetMaker:
         # Check that no layer is empty
         for (i, layer) in enumerate(self._layers):
             if len(layer) == 0:
-                raise ValueError("No nodes in layer[%d]", i)
+                raise ValueError("No nodes in layer[%d]" % (i,))
 
         # And create the placeholder tensor which represent the inputs
         self._input_tensor = tf.placeholder(
@@ -162,6 +164,12 @@ class NetMaker:
                 for referee in node.referees:
                     # The referee's layer info
                     (referee_tensor, referee_mapping) = layers[referee.depth]
+
+                    # Ignore any referees which are not in the mapping
+                    # for some reason
+                    if referee not in referee_mapping:
+                        LOG.debug("%s not in layer[%d] mapping", referee, depth)
+                        continue
 
                     # Determin the offset of this node in the layer tensor and,
                     # thus, in input_tensor
@@ -324,7 +332,7 @@ class NetRunner:
             The graph to run the network for.
         '''
         # Hyper-parameters
-        self._num_epochs    =  10     # Total number of training epochs
+        self._num_epochs    =   5     # Total number of training epochs
         self._batch_size    = 100     # Training batch size
         self._learning_rate =   0.001 # The optimization initial learning rate
 
@@ -339,13 +347,13 @@ class NetRunner:
 
         # Make sure that looks like what we expect
         if len(self._x_train.shape) != 2:
-            raise ValueError("Bad shape for x_train: %s", self._x_train.shape)
+            raise ValueError("Bad shape for x_train: %s" % (self._x_train.shape,))
         if len(self._y_train.shape) != 2:
-            raise ValueError("Bad shape for y_train: %s", self._y_train.shape)
+            raise ValueError("Bad shape for y_train: %s" % (self._y_train.shape,))
         if len(self._x_test.shape) != 2:
-            raise ValueError("Bad shape for x_test: %s",  self._x_test.shape)
+            raise ValueError("Bad shape for x_test: %s"  % (self._x_test.shape,))
         if len(self._y_test.shape) != 2:
-            raise ValueError("Bad shape for y_test: %s",  self._y_test.shape)
+            raise ValueError("Bad shape for y_test: %s"  % (self._y_test.shape,))
 
         # How we are set up
         LOG.info("Init params:")
@@ -389,15 +397,15 @@ class NetRunner:
                 raise ValueError(
                     "Number of data inputs, %d, "
                     "does not match network input count, %d, "
-                    "for graph %s",
-                    num_in, in_tensor.shape[1], self._graph
+                    "for graph %s" %
+                    (num_in, in_tensor.shape[1], self._graph)
                 )
             if num_out != out_tensor.shape[1]:
                 raise ValueError(
                     "Number of data outputs, %d, "
                     "does not match network output count, %d, "
-                    "for graph %s",
-                    num_out, out_tensor.shape[1], self._graph
+                    "for graph %s" %
+                    (num_out, out_tensor.shape[1], self._graph)
                 )
 
             # Now make the training equipment
@@ -411,7 +419,7 @@ class NetRunner:
 
             # Train for this epoch
             LOG.info("[%s] Training the network", self._graph.name)
-            for epoch in range(self._num_epochs):
+            for epoch in range(1, self._num_epochs + 1):
                 self._do_epoch(epoch, sess, in_tensor, truth, optimizer)
 
             # And give back the loss and accuracy
@@ -420,9 +428,9 @@ class NetRunner:
                               feed_dict={ in_tensor : self._x_test,
                                           truth     : self._y_test })
             LOG.info("[%s] Result: loss=%0.3f accuracy=%0.2f%%",
+                     self._graph.name,
                      result[0],
-                     100 * result[1],
-                     self._graph.name)
+                     100 * result[1])
             return result
                 
 

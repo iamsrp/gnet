@@ -4,6 +4,8 @@ How we log.
 
 import logging
 
+# ------------------------------------------------------------------------------
+
 # Keep it simple for now
 LOG = logging
 

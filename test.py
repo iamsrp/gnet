@@ -4,11 +4,15 @@
 Test the gnet code.
 """
 
-from   graph import Graph, Node, NodeType
-from   log   import LOG
-from   net   import NetMaker
+from   biome  import Biome
+from   graph  import Graph, Node, NodeType
+from   log    import LOG
+from   net    import NetMaker
+from   random import random
 
 import sys
+
+# ------------------------------------------------------------------------------
 
 def assert_raises(fn, msg):
     '''
@@ -27,6 +31,8 @@ def assert_raises(fn, msg):
     except Exception as e:
         LOG.debug("OK[%s]: %s", msg, e)
 
+
+# ------------------------------------------------------------------------------
 
 def test_add_referee():
     '''
@@ -179,6 +185,9 @@ def test_graph():
     # The graph should now be connected
     assert graph.is_connected()
 
+    # Give back the graph
+    return graph
+
 
 def test_net_maker():
     '''
@@ -213,6 +222,16 @@ def test_net_maker():
     net_maker.make_net()
 
 
+def test_biome():
+    '''
+    Test the biome.
+    '''
+    biome = Biome("biome", test_graph(), 10, 0.1)
+    scores = dict()
+    for graph in biome.graphs:
+        scores[graph] = random()
+    biome.step_generation(0.5, scores)
+
 
 # ----------------------------------------------------------------------
 
@@ -220,5 +239,6 @@ if __name__ == "__main__":
     self = sys.modules[__name__]
     for name in dir(self):
         if name.startswith('test_'):
+            LOG.info("Testing %s", name)
             fn = getattr(self, name)
             fn()
