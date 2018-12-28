@@ -332,7 +332,7 @@ class NetRunner:
             The graph to run the network for.
         '''
         # Hyper-parameters
-        self._num_epochs    =   5     # Total number of training epochs
+        self._num_epochs    =   1     # Total number of training epochs
         self._batch_size    = 100     # Training batch size
         self._learning_rate =   0.001 # The optimization initial learning rate
 

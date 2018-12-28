@@ -572,6 +572,79 @@ class Graph:
         return Graph(new_name, new_in, new_out, mids=new_mid)
 
 
+    def to_dict(self):
+        '''
+        Turn the network into a dict of dicts.
+
+        The dict is keyed by node name...
+        '''
+        # Create a mapping from node to name, so that we can stuff
+        # them into the dict
+        names = dict((n, "NODE%d"  % i) for (i, n) in enumerate(self.nodes))
+            
+        # What we will hand back
+        result = dict()
+
+        # Add all the details of each node
+        for node in self.nodes:
+            if node not in names:
+                continue
+            name = names[node]
+
+            # Set any params, including the referees. Some of these
+            # might be unset so we leave them out of the dict
+            # accordingly.
+            params = dict()
+            params['TYPE'] = node.node_type
+            params['REFEREES'] = [name[referee]
+                                  for referee in node.referees
+                                  if referee in names]
+            if node.multiplier is not None:
+                params['MULTIPLIER'] = node.multiplier
+            if node.bias is not None:
+                params['BIAS'] = node.bias
+
+            # And save it
+            result[name] = params
+
+        # And give it all back
+        return result
+
+
+    @staticmethod
+    def from_dict(d):
+        '''
+        Create a new graph from the input dictionary.
+        '''
+        # The mapping from node name to the actual node
+        nodes = dict()
+
+        # The various nodes
+        ins  = []
+        mid  = []
+        outs = []
+
+        # And pull them all in
+        for (name, params) in d:
+            # Create the node
+            node = Node(
+                getattr(NodeType, params['TYPE']),
+                multiplier=params.get('MULTIPLIER', None),
+                bias      =params.get('BIAS',       None)
+            )
+            nodes[name] = node
+
+            if node.node_type == NodeType.IN:
+                ins.append(node)
+            if node.node_type == NodeType.MID:
+                mid.append(node)
+            if node.node_type == NodeType.OUT:
+                outs.append(node)
+
+        # Now construct the graph
+        graph = Graph('foo', ins, outs, mids=mid)
+
+
     def __str__(self):
         return "Graph{'%s',In:%d,Mid:%d,Out:%d,Layers:%d}" % (
             self._name,

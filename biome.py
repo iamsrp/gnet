@@ -81,12 +81,11 @@ class Biome:
         cull_fraction = max(0.0, min(1.0, float(cull_fraction)))
 
         # Put the graphs into order of score, high to low
-        ordered = sorted(self._graphs,
-                         key=lambda g: -scores.get(g, -float_info.max))
+        ordered = sorted(self._graphs, key=lambda g: scores[g], reverse=True)
 
         # How much of the graphs list to copy so that we have culled the desired
         # amount
-        copy_to = max(1, min(len(ordered), 
+        copy_to = max(2, min(len(ordered), 
                              int((1.0 - cull_fraction) * self._population)))
 
         # We copy across values but sampling in such a way as to bias the top
