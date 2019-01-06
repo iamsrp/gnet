@@ -4,6 +4,8 @@ A graph representation of a Neural Net.
 
 from enum import Enum
 
+import json
+
 # ------------------------------------------------------------------------------
 
 class NodeType(Enum):
@@ -580,13 +582,22 @@ class Graph:
         '''
         # Create a mapping from node to name, so that we can stuff
         # them into the dict
-        names = dict((n, "NODE%d"  % i) for (i, n) in enumerate(self.nodes))
+        names = dict((n, "%s_%05d" % (n.node_type.name, i))
+                      for (i, n) in (tuple(enumerate(self._inputs )) +
+                                     tuple(enumerate(self._mid    )) +
+                                     tuple(enumerate(self._outputs))))
             
         # What we will hand back
         result = dict()
 
+        # Add in our name
+        result['NAME'] = self._name
+
+        # All the nodes
+        nodes = dict()
+
         # Add all the details of each node
-        for node in self.nodes:
+        for node in sorted(self.nodes, key=lambda n:names[n]):
             if node not in names:
                 continue
             name = names[node]
@@ -595,20 +606,34 @@ class Graph:
             # might be unset so we leave them out of the dict
             # accordingly.
             params = dict()
-            params['TYPE'] = node.node_type
-            params['REFEREES'] = [name[referee]
-                                  for referee in node.referees
-                                  if referee in names]
+            params['TYPE'] = node.node_type.name
+            params['REFEREES'] = [
+                names[referee]
+                for referee in sorted(node.referees, key=lambda n: names[n])
+                if referee in names
+            ]
             if node.multiplier is not None:
                 params['MULTIPLIER'] = node.multiplier
             if node.bias is not None:
                 params['BIAS'] = node.bias
 
             # And save it
-            result[name] = params
+            nodes[name] = params
+
+        # Put in the nodes
+        result['NODES'] = nodes
 
         # And give it all back
         return result
+
+
+    def to_json(self):
+        '''
+        Turn this graph into a JSON string.
+
+        This has the same toplogy as the result of C{to_dict}.
+        '''
+        return json.dumps(self.to_dict())
 
 
     @staticmethod
@@ -624,8 +649,8 @@ class Graph:
         mid  = []
         outs = []
 
-        # And pull them all in
-        for (name, params) in d:
+        # Pull all the nodes in
+        for (name, params) in d['NODES'].items():
             # Create the node
             node = Node(
                 getattr(NodeType, params['TYPE']),
@@ -641,8 +666,32 @@ class Graph:
             if node.node_type == NodeType.OUT:
                 outs.append(node)
 
-        # Now construct the graph
-        graph = Graph('foo', ins, outs, mids=mid)
+        # Now we can construct the graph
+        graph = Graph(d['NAME'], ins, outs, mids=mid)
+
+        # Connect everything up
+        for (name, params) in d['NODES'].items():
+            node = nodes[name]
+            for ref_name in params['REFEREES']:
+                referee = nodes[ref_name]
+                node.add_referee(referee)
+
+        # And hand it back
+        return graph
+
+
+    @staticmethod
+    def from_json(j):
+        '''
+        Create a new graph from the input JSON string.
+
+        This is the reciprocal method to C{to_json()}.
+
+        @rtype: Graph
+        @return:
+            The graph represented by the given JSON string.
+        '''
+        return Graph.from_dict(json.loads(j))
 
 
     def __str__(self):

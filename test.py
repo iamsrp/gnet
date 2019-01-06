@@ -233,6 +233,20 @@ def test_biome():
     biome.step_generation(0.5, scores)
 
 
+def test_graph_io():
+    '''
+    Test rendering the graph to and from a JSON string (and, hence, a dict).
+    '''
+    src          = test_graph()
+    src_str      = str(src)
+    src_json_str = src.to_json()
+    dst          = Graph.from_json(src_json_str)
+    dst_str      = str(dst)
+    dst_json_str = dst.to_json()
+    assert src_str      == dst_str,      "%s != %s" % (src_str, dst_str)
+    assert src_json_str == dst_json_str, "%s != %s" % (src_json_str, dst_json_str)
+
+
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":

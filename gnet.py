@@ -102,7 +102,8 @@ def run(runner_factory,
         population=3,
         mutation_factor=0.1,
         cull_fraction=0.5,
-        num_threads=1):
+        num_threads=1,
+        best_dir=None):
     '''
     Starting with a seed graph, keep working to produce more networks.
 
@@ -124,6 +125,9 @@ def run(runner_factory,
     @type  num_threads: int
     @param num_threads:
         The number of subprocesses to evaluate the nets in.
+    @type  best_dir: str or None
+    @param best_dir:
+        The directory to write out the best network to each round.
     '''
     # Create a child thread to do the actual work
     def thread_maker(graph, results):
@@ -194,10 +198,21 @@ def run(runner_factory,
 
         # Print out all the info, since some will be lost with all the other
         # info being printed out
+        graphs = sorted(biome.graphs,
+                        key=lambda g: results.get(g, _EMPTY_RESULT)['score'])
         LOG.info("Scores:")
-        for graph in sorted(biome.graphs,
-                            key=lambda g: results.get(g, _EMPTY_RESULT)['score']):
+        for graph in graphs:
             LOG.info("%40s %s", graph, results.get(graph, _EMPTY_RESULT)['score'])
+
+        # Save the best one, if we have a place to put it
+        if len(graphs) > 0 and best_dir is not None:
+            try:
+                fn = os.path.join(best_dir, "best_%d" % round)
+                LOG.info("Writing best graph as %s", fn)
+                with open(fn, "w") as fh:
+                    fh.write(graphs[0].to_json())
+            except Exception as e:
+                LOG.warning("Failed to write out graph as %s: %s", (fn, e))
 
         # Now move on to the next generation
         biome.step_generation(
@@ -213,4 +228,4 @@ def run(runner_factory,
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    run(Mnist, Mnist.create_graph('seed_graph'))
+    run(Mnist, Mnist.create_graph('seed_graph'), best_dir='/tmp')

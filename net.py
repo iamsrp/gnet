@@ -325,16 +325,29 @@ class NetRunner:
     '''
     The base class for evaluating nets generated from some L{Graph}.
     '''
-    def __init__(self, graph):
+    def __init__(self,
+                 graph,
+                 num_epochs=10,
+                 batch_size=100,
+                 learning_rate=0.001):
         '''
         @type  graph: Graph
         @param graph:
             The graph to run the network for.
+        @type  num_epochs: int
+        @param num_epochs:
+            The number of epochs to train for.
+        @type  batch_size: int
+        @param batch_size:
+            The batch size to use.
+        @type  learning_rate: float
+        @param learning_rate:
+            The optimization initial learning rate.
         '''
         # Hyper-parameters
-        self._num_epochs    =   1     # Total number of training epochs
-        self._batch_size    = 100     # Training batch size
-        self._learning_rate =   0.001 # The optimization initial learning rate
+        self._num_epochs    = num_epochs
+        self._batch_size    = batch_size
+        self._learning_rate = learning_rate
 
         LOG.info("Graph: %s", graph)
         self._graph = graph
