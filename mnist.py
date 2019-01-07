@@ -59,13 +59,20 @@ class Mnist(NetRunner):
 
 
     @staticmethod
-    def create_graph(name):
+    def create_graph(name, num_mid=200):
         '''
         Create a graph instance for use with Mnist.
+
+        @type  name: str
+        @param name:
+            The name of the graph.
+        @type  num_mid: int
+        @param num_mid:
+            The number of nodes in the middle hidden layer.
         '''
         # Create the net graph, first the nodes
         ins  = [Node(node_type=NodeType.IN)  for i in range(Mnist._IMG_SIZE_FLAT)]
-        mids = [Node()                       for i in range(200)]
+        mids = [Node()                       for i in range(int(num_mid))]
         outs = [Node(node_type=NodeType.OUT) for i in range(Mnist._N_CLASSES)]
 
         # Connect them up

@@ -207,7 +207,7 @@ def run(runner_factory,
         # Save the best one, if we have a place to put it
         if len(graphs) > 0 and best_dir is not None:
             try:
-                fn = os.path.join(best_dir, "best_%d" % round)
+                fn = os.path.join(best_dir, "best_%08d" % round)
                 LOG.info("Writing best graph as %s", fn)
                 with open(fn, "w") as fh:
                     fh.write(graphs[0].to_json())
@@ -228,4 +228,6 @@ def run(runner_factory,
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    run(Mnist, Mnist.create_graph('seed_graph'), best_dir='/tmp')
+    run(Mnist,
+        Mnist.create_graph('seed_graph', num_mid=10),
+        best_dir='/tmp')
