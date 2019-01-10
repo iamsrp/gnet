@@ -32,9 +32,15 @@ class Score:
         @param accuracy:
             The graph accuracy.
         '''
-        self._num_mid  = len(graph.mid) if graph is not None else 0
         self._accuracy = float(int(accuracy * 10000)) / 10000.0
         self._loss     = float(loss)
+        self._num_mid  = 0
+        self._num_cxn  = 0
+
+        if graph is not None:
+            self._num_mid  = len(graph.mid)
+            for node in graph.nodes:
+                self._num_cxn += len(node.referees)
 
 
     def cmp(self, other):
@@ -44,7 +50,11 @@ class Score:
         if self._accuracy > other._accuracy:
             return 1
 
-        # Fewer is better
+        # Fewer is better for each of these
+        if self._num_cxn < other._num_cxn:
+            return 1
+        if self._num_cxn > other._num_cxn:
+            return -1
         if self._num_mid < other._num_mid:
             return 1
         if self._num_mid > other._num_mid:
@@ -84,8 +94,8 @@ class Score:
 
 
     def __str__(self):
-        return 'Score(acc=%0.2f%%,size=%d,loss=%0.4f)' % (
-            self._accuracy * 100, self._num_mid, self._loss
+        return 'Score(acc=%0.2f%%,size=%d,#cxns=%d,loss=%0.4f)' % (
+            self._accuracy * 100, self._num_mid, self._num_cxn, self._loss
         )
 
 
