@@ -32,32 +32,39 @@ class Score:
         @param accuracy:
             The graph accuracy.
         '''
-        self._accuracy = float(int(accuracy * 10000)) / 10000.0
-        self._loss     = float(loss)
-        self._num_mid  = 0
-        self._num_cxn  = 0
+        self._accuracy  = float(int(accuracy * 10000)) / 10000.0
+        self._loss      = float(loss)
+        self._num_nodes = 0
+        self._num_cxn   = 0
+        self._score     = 0
 
         if graph is not None:
-            self._num_mid  = len(graph.mid)
+            self._num_nodes  = len(graph.nodes)
             for node in graph.nodes:
                 self._num_cxn += len(node.referees)
+            # We scale the accuracy by how connected the graph is. We
+            # say that a less connected graph is better, even if it
+            # if it winds up with slightly lower accuracy.
+            self._score = (
+                self._accuracy * (1.0 - self._num_cxn / self._num_nodes ** 2)
+            )
 
 
     def cmp(self, other):
-        # Higher accuracy is better
-        if self._accuracy < other._accuracy:
+        # Higher score is better
+        if self._score < other._score:
             return -1
-        if self._accuracy > other._accuracy:
+        if self._score > other._score:
             return 1
 
         # Fewer is better for each of these
+        if self._num_nodes < other._num_nodes:
+            return 1
+        if self._num_nodes > other._num_nodes:
+            return -1
         if self._num_cxn < other._num_cxn:
             return 1
         if self._num_cxn > other._num_cxn:
-            return -1
-        if self._num_mid < other._num_mid:
-            return 1
-        if self._num_mid > other._num_mid:
             return -1
 
         # Smaller loss is better
@@ -94,8 +101,12 @@ class Score:
 
 
     def __str__(self):
-        return 'Score(acc=%0.2f%%,size=%d,#cxns=%d,loss=%0.4f)' % (
-            self._accuracy * 100, self._num_mid, self._num_cxn, self._loss
+        return 'Score(score=%0.4f,acc=%0.2f%%,size=%d,#cxns=%d,loss=%0.4f)' % (
+            self._score,
+            self._accuracy * 100,
+            self._num_nodes,
+            self._num_cxn,
+            self._loss
         )
 
 
