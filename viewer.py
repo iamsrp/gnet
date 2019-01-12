@@ -25,9 +25,11 @@ MOVE_EYE_2 = "MOVE_EYE_2"
 TRANS      = "TRANS"
 ZOOM       = "ZOOM"
 
+LINK_MOD = 3
+
 g_fViewDistance = 9.0
-g_Width         = 600
-g_Height        = 600
+g_Width         = 1024
+g_Height        =  768
 
 g_nearPlane =    1.0
 g_farPlane  = 1000.0
@@ -54,8 +56,8 @@ def scenemodel():
 
     # The shape
     num_layers = graph.num_layers
-    x_offset   = -num_layers / 2
-    (x_scale, y_scale, z_scale) = (2, 0.2, 0.2)
+    x_offset   = (1-num_layers) / 2
+    (x_scale, y_scale, z_scale) = (2, 0.25, 0.25)
 
     node2pos = dict()
 
@@ -81,7 +83,7 @@ def scenemodel():
                 node = nodes[pos]
                 x = node.depth
 
-                count_scale = max_count / count
+                count_scale = math.sqrt(max_count / count)
 
                 # Remember the position
                 pos = (float(x + x_offset) * x_scale,
@@ -114,16 +116,21 @@ def scenemodel():
 
 
         # Now draw the connections
+        count = 0
         for (node, pos) in node2pos.items():
             for referee in node.referees:
                 if node in node2pos and referee in node2pos:
+                    skip = LINK_MOD >= 1 and (count % LINK_MOD) > 0
+                    count += 1
+                    if skip:
+                        continue
                     glPushMatrix()
                     glBegin(GL_LINES)
                     glMaterialfv(GL_FRONT_AND_BACK,
                                  GL_AMBIENT,
-                                 [1.0, 1.0, 1.0, 1.0])
-                    glVertex3fv(node2pos[node   ])
+                                 [1.0, 1.0, 1.0, 0.2])
                     glVertex3fv(node2pos[referee])
+                    glVertex3fv(node2pos[node   ])
                     glEnd()
                     glPopMatrix()
 
