@@ -25,7 +25,7 @@ MOVE_EYE_2 = "MOVE_EYE_2"
 TRANS      = "TRANS"
 ZOOM       = "ZOOM"
 
-LINK_MOD = 3
+LINK_MOD = 1
 
 g_fViewDistance = 9.0
 g_Width         = 1024
@@ -65,10 +65,16 @@ def scenemodel():
     for node in graph.nodes:
         layers[node.depth].append(node)
 
-    # Determine the largest "count" value, for scaling the grids
-    max_count = 0
+    # Determine the largest values, for scaling the grids etc.
+    max_count     = 0
+    max_referees  = [1 for i in range(num_layers)]
+    max_referrers = [1 for i in range(num_layers)] 
     for nodes in layers:
         max_count = max(max_count, int(math.sqrt(len(nodes)) + 1))
+        for node in nodes:
+            d = node.depth
+            max_referees [d] = max(max_referees [d], len(node.referees ))
+            max_referrers[d] = max(max_referrers[d], len(node.referrers))
 
     # Now position and render the nodes
     for nodes in layers:
@@ -93,15 +99,10 @@ def scenemodel():
                 node2pos[node] = pos
 
                 # What sort of node?
-                if node.node_type == NodeType.IN:
-                    color = [1.0, 0.0, 0.0 ,1.0]
-                elif node.node_type == NodeType.MID:
-                    color = [0.0, 1.0, 0.0 ,1.0]
-                elif node.node_type == NodeType.OUT:
-                    color = [0.0, 0.0, 1.0 ,1.0]
-                else:
-                    # Should not happen
-                    color = [1.0, 1.0, 1.0 ,1.0]
+                color = [len(node.referrers) / max_referrers[x],
+                         len(node.referees)  / max_referees [x],
+                         0.0,
+                         1.0]
 
                 # Position it
                 glPushMatrix()
@@ -109,7 +110,7 @@ def scenemodel():
 
                 # Render it
                 glMaterialfv(GL_FRONT, GL_DIFFUSE, color)
-                glutSolidSphere(0.1, 20, 20)
+                glutSolidSphere(0.1, 5, 5)
 
                 # And done
                 glPopMatrix()
@@ -118,7 +119,11 @@ def scenemodel():
         # Now draw the connections
         count = 0
         for (node, pos) in node2pos.items():
+            if True and node.depth != 3:
+                continue
             for referee in node.referees:
+                if True and referee.depth != 1:
+                    continue
                 if node in node2pos and referee in node2pos:
                     skip = LINK_MOD >= 1 and (count % LINK_MOD) > 0
                     count += 1
