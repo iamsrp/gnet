@@ -12,6 +12,7 @@ from   OpenGL.GLU  import *
 from   OpenGL.GLUT import *
 
 from   graph       import Graph, NodeType
+from   random      import random
 
 import getopt
 import math
@@ -56,7 +57,7 @@ class Viewer():
         # How we render the links. The modulo value allows us to
         # display fewer of them, and we can toggle seeing the start
         # and ending layers.
-        self._link_mod   = 11
+        self._link_fact  = 0.1
         self._link_froms = set()
         self._link_tos   = set()
 
@@ -141,7 +142,6 @@ class Viewer():
                 glPopMatrix()
 
             # Now draw the connections
-            counts = dict((n, 0) for n in node2pos.keys())
             for (node, pos) in node2pos.items():
                 # Skip if this layer is not enabled as a from
                 if node.depth not in self._link_froms:
@@ -153,8 +153,7 @@ class Viewer():
                         continue
 
                     # Skip if it's not a modulo-matching link
-                    counts[node] += 1
-                    if (counts[node] % self._link_mod) > 0:
+                    if random() > self._link_fact:
                         continue
 
                     # Okay to render
@@ -262,15 +261,15 @@ class Viewer():
             exit(0)
 
         elif key == b'+' or key == b'=':
-            # Want more links, so smaller mod
-            self._link_mod = max(self._link_mod - 1, 1)
-            print("Link mod now %d" % (self._link_mod,))
+            # Want more links, so larger factor
+            self._link_fact = min(self._link_fact + 0.01, 1)
+            print("Link factor now %0.2f" % (self._link_fact,))
             redraw = True
 
         elif key == b'-':
-            # Want fewer links, so bigger mod
-            self._link_mod += 1
-            print("Link mod now %d" % (self._link_mod,))
+            # Want fewer links, so smaller factor
+            self._link_fact = max(self._link_fact - 0.01, 0)
+            print("Link factor now %0.2f" % (self._link_fact,))
             redraw = True
 
         # Handle the user pressing 1~0, or shift-1~0, to toggle
