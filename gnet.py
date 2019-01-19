@@ -42,11 +42,15 @@ class Score:
             self._num_nodes  = len(graph.nodes)
             for node in graph.nodes:
                 self._num_cxn += len(node.referees)
-            # We scale the accuracy by how connected the graph is. We
-            # say that a less connected graph is better, even if it
-            # if it winds up with slightly lower accuracy.
+            # We scale the accuracy by:
+            #  1. How connected the graph is. We say that a less
+            #     connected graph is better, even if it if it winds up
+            #     with slightly lower accuracy.
+            #  2. How many mid nodes it has compared with the input.
             self._score = (
-                self._accuracy * (1.0 - self._num_cxn / self._num_nodes ** 2)
+                self._accuracy *
+                (0.1 - self._num_cxn / self._num_nodes ** 2) *
+                (0.1 - math.tanh(len(graph.mid) / len(graph.inputs)))
             )
 
 
