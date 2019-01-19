@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 '''
-Simple and very cheesy viewer. 
+Simple graph viewer.
 
-Adapted from:
+Very early template code from here:
   http://carloluchessa.blogspot.com/2012/09/simple-viewer-in-pyopengl.html
 and other sources.
 '''
@@ -17,79 +17,104 @@ import getopt
 import math
 import sys
 
-# ----------------------------------------------------------------------
-# Constants
+class Viewer():
+    '''
+    A class to take a graph and render it for viewing.
+    '''
+    # Commands
+    _YAW  = "YAW"
+    _ROLL = "ROLL"
+    _MOVE = "MOVE"
+    _ZOOM = "ZOOM"
 
-MOVE_EYE   = "MOVE_EYE"
-MOVE_EYE_2 = "MOVE_EYE_2"
-TRANS      = "TRANS"
-ZOOM       = "ZOOM"
+    def __init__(self, filename):
+        '''
+        Constructor.
+        '''
+        # Window settings etc
+        self._width      = 1024
+        self._height     =  768
+        self._view_dist  =    9.0
+        self._near_plane =    1.0
+        self._far_plane  = 1000.0
 
-LINK_MOD = 1
+        # The current action which we are performing, if any
+        self._action = ""
 
-g_fViewDistance = 9.0
-g_Width         = 1024
-g_Height        =  768
+        # The last coordinates we saw for x and y in an input
+        self._last_x = 0.0
+        self._last_y = 0.0
 
-g_nearPlane =    1.0
-g_farPlane  = 1000.0
+        # Set in _reset_view()
+        self._zoom     = None
+        self._x_rotate = None
+        self._y_rotate = None
+        self._z_rotate = None
+        self._x_trans  = None
+        self._y_trans  = None
 
-# Global variables
-action = ""
-xStart = 0.0
-yStart = 0.0
-zoom   = 65.0
+        # How we render the links. The modulo value allows us to
+        # display fewer of them, and we can toggle seeing the start
+        # and ending layers.
+        self._link_mod   = 11
+        self._link_froms = set()
+        self._link_tos   = set()
 
-xRotate = 0.0
-yRotate = 0.0
-zRotate = 0.0
+        # Read in the graph
+        with open(filename, 'r') as fh:
+            json = fh.readline()
+        self._graph = Graph.from_json(json)
 
-xTrans = 0.0
-yTrans = 0.0
+        # We see them all by default
+        for i in range(self._graph.num_layers):
+            self._link_froms.add(i)
+            self._link_tos  .add(i)
 
-graph = None
+        # Bring back to the defaults
+        self._reset_view()
 
-#-------------------
+    #-------------------
 
-def scenemodel():
-    glRotate(-90, 0.0, 0.0, 1.0)
+    def _render(self):
+        '''
+        Render the scene from scratch.
+        '''
+        # The shape
+        num_layers = self._graph.num_layers
+        x_offset   = (1-num_layers) / 2.0
+        (x_scale, y_scale, z_scale) = (2, 0.25, 0.25)
 
-    # The shape
-    num_layers = graph.num_layers
-    x_offset   = (1-num_layers) / 2
-    (x_scale, y_scale, z_scale) = (2, 0.25, 0.25)
+        # The positions of the nodes in space
+        node2pos = dict()
 
-    node2pos = dict()
+        # Put the nodes into their layers
+        layers = [[] for i in range(num_layers)]
+        for node in self._graph.nodes:
+            layers[node.depth].append(node)
 
-    layers = [[] for i in range(num_layers)]
-    for node in graph.nodes:
-        layers[node.depth].append(node)
+        # Determine the largest values, for scaling the grids etc.
+        max_count     = 0
+        max_referees  = [1 for i in range(num_layers)]
+        max_referrers = [1 for i in range(num_layers)]
+        for nodes in layers:
+            max_count = max(max_count, int(math.sqrt(len(nodes)) + 1))
+            for node in nodes:
+                d = node.depth
+                max_referees [d] = max(max_referees [d], len(node.referees ))
+                max_referrers[d] = max(max_referrers[d], len(node.referrers))
 
-    # Determine the largest values, for scaling the grids etc.
-    max_count     = 0
-    max_referees  = [1 for i in range(num_layers)]
-    max_referrers = [1 for i in range(num_layers)] 
-    for nodes in layers:
-        max_count = max(max_count, int(math.sqrt(len(nodes)) + 1))
-        for node in nodes:
-            d = node.depth
-            max_referees [d] = max(max_referees [d], len(node.referees ))
-            max_referrers[d] = max(max_referrers[d], len(node.referrers))
-
-    # Now position and render the nodes
-    for nodes in layers:
-        count = int(math.sqrt(len(nodes)) + 1)
-        y_offset = -count / 2
-        z_offset = y_offset
-        for z in range(count):
-            for y in range(count):
-                pos = z * count + y
-                if pos >= len(nodes):
-                    break
+        # Now position and render the nodes
+        for nodes in layers:
+            count = int(math.sqrt(len(nodes)))
+            y_offset = -count / 2
+            z_offset = y_offset
+            for pos in range(len(nodes)):
+                z = int(pos / count)
+                y = int(pos % count)
                 node = nodes[pos]
                 x = node.depth
 
-                count_scale = math.sqrt(max_count / count)
+                count_scale = math.sqrt(max_count / count)**1.25
 
                 # Remember the position
                 pos = (float(x + x_offset) * x_scale,
@@ -115,20 +140,24 @@ def scenemodel():
                 # And done
                 glPopMatrix()
 
-
-        # Now draw the connections
-        count = 0
-        for (node, pos) in node2pos.items():
-            if True and node.depth != 3:
-                continue
-            for referee in node.referees:
-                if True and referee.depth != 1:
+            # Now draw the connections
+            counts = dict((n, 0) for n in node2pos.keys())
+            for (node, pos) in node2pos.items():
+                # Skip if this layer is not enabled as a from
+                if node.depth not in self._link_froms:
                     continue
-                if node in node2pos and referee in node2pos:
-                    skip = LINK_MOD >= 1 and (count % LINK_MOD) > 0
-                    count += 1
-                    if skip:
+
+                for referee in node.referees:
+                    # Skip if this layer is not enabled as a to
+                    if referee.depth not in self._link_tos:
                         continue
+
+                    # Skip if it's not a modulo-matching link
+                    counts[node] += 1
+                    if (counts[node] % self._link_mod) > 0:
+                        continue
+
+                    # Okay to render
                     glPushMatrix()
                     glBegin(GL_LINES)
                     glMaterialfv(GL_FRONT_AND_BACK,
@@ -140,126 +169,215 @@ def scenemodel():
                     glPopMatrix()
 
 
-def print_help(): 
-    print( """    
--------------------------------------------------------------------
-Left Mousebutton       - move eye position (+ Shift for third axis)
-Middle Mousebutton     - translate the scene
-Right Mousebutton      - move up / down to zoom in / out
-<R> Key                - reset viewpoint
-<Q> Key                - exit the program
--------------------------------------------------------------------
-""")
+    def _init(self):
+        '''
+        Set up the OpenGL scene how we like it.
+        '''
+        glEnable(GL_NORMALIZE)
+        glLightfv(GL_LIGHT0,GL_POSITION,[ 0.0, 10.0, 10.0, 0.0 ] )
+        glLightfv(GL_LIGHT0,GL_AMBIENT, [ 0.0,  0.0,  0.0, 1.0 ]);
+        glLightfv(GL_LIGHT0,GL_DIFFUSE, [ 1.0,  1.0,  1.0, 1.0 ]);
+        glLightfv(GL_LIGHT0,GL_SPECULAR,[ 1.0,  1.0,  1.0, 1.0 ]);
+        glEnable(GL_LIGHT0)
+        glEnable(GL_LIGHTING)
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LESS)
+        glShadeModel(GL_SMOOTH)
 
 
-def init():
-    glEnable(GL_NORMALIZE)
-    glLightfv(GL_LIGHT0,GL_POSITION,[ .0, 10.0, 10., 0. ] )
-    glLightfv(GL_LIGHT0,GL_AMBIENT,[ .0, .0, .0, 1.0 ]);
-    glLightfv(GL_LIGHT0,GL_DIFFUSE,[ 1.0, 1.0, 1.0, 1.0 ]);
-    glLightfv(GL_LIGHT0,GL_SPECULAR,[ 1.0, 1.0, 1.0, 1.0 ]);
-    glEnable(GL_LIGHT0)
-    glEnable(GL_LIGHTING)
-    glEnable(GL_DEPTH_TEST)
-    glDepthFunc(GL_LESS)
-    glShadeModel(GL_SMOOTH)
-    reset_view()
+    def _reset_view(self):
+        '''
+        Put the view back to a sensible place.
+        '''
+        self._zoom     = 65.0
+        self._x_rotate =  0.0
+        self._y_rotate =  0.0
+        self._z_rotate =  0.0
+        self._x_trans  =  0.0
+        self._y_trans  =  0.0
 
 
-def reset_view():
-    global zoom, xRotate, yRotate, zRotate, xTrans, yTrans
-    zoom = 65.
-    xRotate = 0.
-    yRotate = 0.
-    zRotate = 0.
-    xTrans = 0.
-    yTrans = 0.
-    glutPostRedisplay()
+    def _display(self):
+        '''
+        Do the job of setting things up to be rendered.
+        '''
+        # Clear frame buffer and depth buffer
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        # Set up viewing transformation, looking down -Z axis
+        glLoadIdentity()
+        gluLookAt( 0.0, 0.0, -self._view_dist,
+                   0.0, 0.0, 0.0,
+                  -0.1, 0.0, 0.0)
+
+        # Set perspective and zoom
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(self._zoom,
+                       float(self._width) / float(self._height),
+                       self._near_plane, self._far_plane)
+
+        # Put things into the right place
+        glMatrixMode(GL_MODELVIEW)
+        glTranslatef( self._y_trans/100.,                  0.0, 0.0)
+        glTranslatef(                0.0, -self._x_trans/100.0, 0.0)
+
+        glRotatef( -self._z_rotate, 0.0, 0.0, 1.0)
+        glRotatef( -self._x_rotate, 1.0, 0.0, 0.0)
+        glRotatef( -self._y_rotate, 0.0, 1.0, 0.0)
+
+        # Rotate so that the layers are columnar
+        glRotate(-90, 0.0, 0.0, 1.0)
+
+        # Render the scene
+        self._render()
+
+        # Make sure changes appear onscreen
+        glutSwapBuffers()
 
 
-def display():
-    # Clear frame buffer and depth buffer
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    # Set up viewing transformation, looking down -Z axis
-    glLoadIdentity()
-    gluLookAt(0, 0, -g_fViewDistance, 0, 0, 0, -.1, 0, 0)   #-.1,0,0
-    # Set perspective (also zoom)
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    gluPerspective(zoom, float(g_Width)/float(g_Height), g_nearPlane, g_farPlane)
-    glMatrixMode(GL_MODELVIEW)
-    # Render the scene
-    polar_view()
-    scenemodel()
-    # Make sure changes appear onscreen
-    glutSwapBuffers()
+    def _reshape(self, width, height):
+        '''
+        Handle a window resize.
+        '''
+        self._width  = width
+        self._height = height
+        glViewport(0, 0, self._width, self._height)
 
 
-def reshape(width, height):
-    global g_Width, g_Height
-    g_Width = width
-    g_Height = height
-    glViewport(0, 0, g_Width, g_Height)
-    
+    def _keyboard(self, key, x, y):
+        '''
+        Handle a user key-press.
+        '''
+        # Set if we want to redraw
+        redraw = False
 
-def polar_view():
-    glTranslatef( yTrans/100., 0.0, 0.0 )
-    glTranslatef(  0.0, -xTrans/100., 0.0)
-    glRotatef( -zRotate, 0.0, 0.0, 1.0)
-    glRotatef( -xRotate, 1.0, 0.0, 0.0)
-    glRotatef( -yRotate, .0, 1.0, 0.0)
-   
+        if key == b'r':
+            # 'r' pressed, for a reset
+            print("Resetting view")
+            self._reset_view()
 
-def keyboard(key, x, y):
-    if key == b'r':
-        reset_view()
+        elif key == b'q' or key == b'\x1b':
+            # 'q' or esc pressed
+            exit(0)
+
+        elif key == b'+' or key == b'=':
+            # Want more links, so smaller mod
+            self._link_mod = max(self._link_mod - 1, 1)
+            print("Link mod now %d" % (self._link_mod,))
+            redraw = True
+
+        elif key == b'-':
+            # Want fewer links, so bigger mod
+            self._link_mod += 1
+            print("Link mod now %d" % (self._link_mod,))
+            redraw = True
+
+        # Handle the user pressing 1~0, or shift-1~0, to toggle
+        # rendering of the ends of the links.
+        elif key in b'1234567890!@#$%^&*()':
+            index = b'1234567890!@#$%^&*()'.find(key)
+            which = index % 10
+            if index < 10:
+                name = "froms"
+                set_ = self._link_froms
+            else:
+                name = "tos"
+                set_= self._link_tos
+
+            if which in set_:
+                print("Disabling %d in %s" % (which, name))
+                set_.remove(which)
+            else:
+                print("Enabling %d in %s" % (which, name))
+                set_.add(which)
+
+            redraw = True
+
+        # Need to redraw?
+        if redraw:
+            glutPostRedisplay()
+
+
+    def _mouse(self, button, state, x, y):
+        '''
+        Handle a mouse action.
+        '''
+        if button == GLUT_LEFT_BUTTON:
+            if glutGetModifiers() == GLUT_ACTIVE_SHIFT:
+                self._action = Viewer._ROLL
+            else:
+                self._action = Viewer._YAW
+        elif button == GLUT_MIDDLE_BUTTON:
+            self._action = Viewer._MOVE
+        elif button == GLUT_RIGHT_BUTTON:
+            self._action = Viewer._ZOOM
+        elif button == 3:
+            self._zoom = min(150, self._zoom * 1.1)
+            glutPostRedisplay()
+        elif button == 4:
+            self._zoom = max(1.1, self._zoom * 0.9)
+            glutPostRedisplay()
+
+        # And remember where we got to
+        self._last_x = x
+        self._last_y = y
+
+
+    def _motion(self, x, y):
+        '''
+        Handle mouse motion while we have an actyion.
+        '''
+        if self._action == Viewer._YAW:
+            self._x_rotate += x - self._last_x
+            self._y_rotate -= y - self._last_y
+        elif self._action == Viewer._ROLL:
+            self._z_rotate += y - self._last_y
+        elif self._action == Viewer._MOVE:
+            self._x_trans += x - self._last_x
+            self._y_trans += y - self._last_y
+        elif self._action == Viewer._ZOOM:
+            self._zoom -= y - self._last_y
+            if self._zoom > 150.:
+                self._zoom = 150.
+            elif self._zoom < 1.1:
+                self._zoom = 1.1
+        else:
+            print("unknown action\n", self._action)
+
+        self._last_x = x
+        self._last_y = y
+
         glutPostRedisplay()
 
-    if key == b'q':
-        exit(0)
 
+    def run(self):
+        '''
+        Main loop.
+        '''
+        # GLUT Window Initialization
+        glutInit()
+        glutInitDisplayMode(GLUT_DOUBLE |
+                            GLUT_RGB    |
+                            GLUT_DEPTH)
+        glutInitWindowSize(self._width, self._height)
+        glutInitWindowPosition(0 + 4, self._height // 4)
+        glutCreateWindow("Net Viewer")
 
-def mouse(button, state, x, y):
-    global action, xStart, yStart
-    if button == GLUT_LEFT_BUTTON:
-        if glutGetModifiers() == GLUT_ACTIVE_SHIFT:
-            action = MOVE_EYE_2
-        else:
-            action = MOVE_EYE
-    elif button == GLUT_MIDDLE_BUTTON:
-        action = TRANS
-    elif button == GLUT_RIGHT_BUTTON:
-        action = ZOOM
+        # Initialize OpenGL graphics state
+        self._init()
 
-    xStart = x
-    yStart = y
+        # Register callbacks
+        glutReshapeFunc (self._reshape)
+        glutDisplayFunc (self._display)
+        glutMouseFunc   (self._mouse)
+        glutMotionFunc  (self._motion)
+        glutKeyboardFunc(self._keyboard)
 
+        # Turn the flow of control over to GLUT
+        glutMainLoop()
 
-def motion(x, y):
-    global zoom, xStart, yStart, xRotate, yRotate, zRotate, xTrans, yTrans
-    if action == MOVE_EYE:
-        xRotate += x - xStart
-        yRotate -= y - yStart
-    elif action == MOVE_EYE_2:
-        zRotate += y - yStart
-    elif action == TRANS:
-        xTrans += x - xStart
-        yTrans += y - yStart
-    elif action == ZOOM:
-        zoom -= y - yStart
-        if zoom > 150.:
-            zoom = 150.
-        elif zoom < 1.1:
-            zoom = 1.1
-    else:
-        print("unknown action\n", action)
-
-    xStart = x
-    yStart = y 
-
-    glutPostRedisplay()
-
-# ----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
 if __name__=="__main__":
     # Parse the options
@@ -268,32 +386,6 @@ if __name__=="__main__":
         print("Usage: %s <net_file>")
         exit(1)
 
-    # Read in the graph
-    with open(args[0], 'r') as fh:
-        json = fh.readline()
-    graph = Graph.from_json(json)
-
-    # GLUT Window Initialization
-    glutInit()
-    glutInitDisplayMode(GLUT_DOUBLE |
-                        GLUT_RGB    |
-                        GLUT_DEPTH)
-    glutInitWindowSize(g_Width, g_Height) 
-    glutInitWindowPosition(0 + 4, g_Height // 4)
-    glutCreateWindow("Net Viewer")
-
-    # Initialize OpenGL graphics state
-    init()
-
-    # Register callbacks
-    glutReshapeFunc (reshape)
-    glutDisplayFunc (display)    
-    glutMouseFunc   (mouse)
-    glutMotionFunc  (motion)
-    glutKeyboardFunc(keyboard)
-
-    # Tell the user how to work it
-    print_help()
-
-    # Turn the flow of control over to GLUT
-    glutMainLoop()
+    # Create the viewer and hand off control to it
+    viewer = Viewer(args[0])
+    viewer.run()

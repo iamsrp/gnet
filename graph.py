@@ -71,9 +71,21 @@ class Node:
 
         @rtype: frozenset
         @return:
-            The set of nodes which this node refers to. 
+            The set of nodes which this node refers to.
         '''
         return frozenset(self._referees)
+
+
+    @property
+    def referrers(self):
+        '''
+        The set of nodes which refer to this node.
+
+        @rtype: frozenset
+        @return:
+            The set of nodes which refer to this node. 
+        '''
+        return frozenset(self._referrers)
 
 
     @property
