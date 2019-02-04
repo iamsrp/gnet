@@ -49,8 +49,8 @@ class Score:
             #  2. How many mid nodes it has compared with the input.
             self._score = (
                 self._accuracy *
-                (0.1 - self._num_cxn / self._num_nodes ** 2) *
-                (0.1 - math.tanh(len(graph.mid) / len(graph.inputs)))
+                (0.01 - self._num_cxn / self._num_nodes ** 2) *
+                (0.01 - math.tanh(len(graph.mid) / len(graph.inputs)))
             )
 
 
