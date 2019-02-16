@@ -235,7 +235,7 @@ def run(runner_factory,
                 fn = os.path.join(best_dir, "best_%08d" % round)
                 LOG.info("Writing best graph as %s", fn)
                 with open(fn, "w") as fh:
-                    fh.write(graphs[0].to_json())
+                    fh.write(graphs[-1].to_json())
             except Exception as e:
                 LOG.warning("Failed to write out graph as %s: %s", (fn, e))
 
