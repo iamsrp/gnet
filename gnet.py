@@ -42,15 +42,13 @@ class Score:
             self._num_nodes  = len(graph.nodes)
             for node in graph.nodes:
                 self._num_cxn += len(node.referees)
-            # We scale the accuracy by:
-            #  1. How connected the graph is. We say that a less
-            #     connected graph is better, even if it if it winds up
-            #     with slightly lower accuracy.
-            #  2. How many mid nodes it has compared with the input.
+            # We scale the accuracy by how connected the graph is. We
+            # say that a less connected graph is better, even if it
+            # if it winds up with slightly lower accuracy.
             self._score = (
-                self._accuracy *
-                (0.01 - self._num_cxn / self._num_nodes ** 2) *
-                (0.01 - math.tanh(len(graph.mid) / len(graph.inputs)))
+                self._accuracy * 
+                (1.0 - 0.01 * self._num_cxn / self._num_nodes ** 2) *
+                (1.0 - 0.01 * math.tanh(len(graph.mid) / len(graph.inputs)))
             )
 
 
@@ -124,10 +122,10 @@ _EMPTY_RESULT = { 'score'    : Score(None, 0, 1),
 
 def run(runner_factory,
         seed_graph,
-        population=3,
+        population=40,
         mutation_factor=0.1,
         cull_fraction=0.5,
-        num_threads=1,
+        num_threads=20,
         best_dir=None):
     '''
     Starting with a seed graph, keep working to produce more networks.
@@ -254,5 +252,5 @@ def run(runner_factory,
 
 if __name__ == "__main__":
     run(Mnist,
-        Mnist.create_graph('seed_graph', num_mid=10),
-        best_dir='/tmp')
+        Mnist.create_graph('seed_graph', num_mid=100),
+        best_dir='/var/tmp')
